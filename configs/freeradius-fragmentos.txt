@@ -1,0 +1,19 @@
+alumno1   Cleartext-Password := "alumno123"
+          Tunnel-Type = VLAN,
+          Tunnel-Medium-Type = IEEE-802,
+          Tunnel-Private-Group-Id = "10"
+
+docente1  Cleartext-Password := "docente123"
+          Tunnel-Type = VLAN,
+          Tunnel-Medium-Type = IEEE-802,
+          Tunnel-Private-Group-Id = "20"
+
+#
+# 	Configuration file for the rlm_files module.
+post-auth {
+	# TP7: llevar la VLAN asignada en el tunel interno al Access-Accept externo
+	update outer.session-state {
+		&Tunnel-Type := &reply:Tunnel-Type
+		&Tunnel-Medium-Type := &reply:Tunnel-Medium-Type
+		&Tunnel-Private-Group-Id := &reply:Tunnel-Private-Group-Id
+	}
