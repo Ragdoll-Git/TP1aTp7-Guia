@@ -179,7 +179,7 @@ Ahora hay que clonar **esta guía** en la VM _lab-server_ para tener los archivo
 
 ```bash
 # ↓ instala git y baja esta guía (con sus configs/ y scripts/) a ~/guia
-sudo apt-get install -y git && git clone https://github.com/Ragdoll-Git/TP1aTP7-Guia-que-si-se-entiende.git ~/guia
+sudo apt-get install -y git && git clone https://github.com/Ragdoll-Git/TP1aTP7-Guia.git ~/guia
 ```
 
 ### 4.2 · En `lab-client`
