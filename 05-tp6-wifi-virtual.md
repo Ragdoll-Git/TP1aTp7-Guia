@@ -6,7 +6,7 @@
 
 ```mermaid
 flowchart LR
-    subgraph ls ["🖥️ lab-server"]
+    subgraph ls ["lab-server"]
         ap["wlan0 (phy0)<br>hostapd = AP<br>02:00:00:00:00:00"]
         aire{{"hwsim0 · el 'aire' simulado<br>(ve todas las tramas)"}}
 
@@ -31,30 +31,32 @@ flowchart LR
 
 ## Paso 1 · Crear las radios y el namespace
 
-🖥️ `lab-server`:
+`lab-server`:
+
+> 💡 **Tip:** este bloque tiene varias líneas; podés guardarlo en un archivo (por ejemplo `crear-radios-wifi.sh`) y ejecutarlo con `bash crear-radios-wifi.sh`.
 
 ```bash
 # ↓ carga el módulo que crea 4 radios Wi-Fi virtuales
-sudo modprobe mac80211_hwsim radios=4
+modprobe mac80211_hwsim radios=4
 
-# ↓ lista las interfaces Wi-Fi y a qué phy pertenece cada una (con sudo: sin él, por SSH da 'command not found')
-sudo iw dev
+# ↓ lista las interfaces Wi-Fi y a qué phy pertenece cada una
+iw dev
 
 # ↓ enciende hwsim0, la interfaz que ve todo el 'aire'
-sudo ip link set hwsim0 up
+ip link set hwsim0 up
 
 # ↓ crea el namespace que va a hacer de cliente
-sudo ip netns add cliente
+ip netns add cliente
 
 # ↓ mueve la radio phy1 adentro del cliente
-sudo iw phy phy1 set netns name cliente
+iw phy phy1 set netns name cliente
 
-sudo ip -n cliente link set lo up
+ip -n cliente link set lo up
 ```
 
 - `radios=4` crea `wlan0` (AP) y `wlan1`, `wlan2`, `wlan3` (clientes). En este TP se usa solo `wlan1`; `wlan2` y `wlan3` se usan en el TP7 (docente e invitado).
-- Se mueve el **phy**, no la interfaz. Con `sudo iw dev` anotá qué phy tiene cada wlan.
-- Si recargás el módulo sin reiniciar, los números cambian (`phy3`, `phy4`…). **Mirá siempre `sudo iw dev`.** Para empezar de cero: `sudo rmmod mac80211_hwsim`.
+- Se mueve el **phy**, no la interfaz. Con `iw dev` anotá qué phy tiene cada wlan.
+- Si recargás el módulo sin reiniciar, los números cambian (`phy3`, `phy4`…). **Mirá siempre `iw dev`.** Para empezar de cero: `rmmod mac80211_hwsim`.
 
 ## Paso 2 · Configurar AP y cliente (WPA2-PSK)
 
@@ -86,21 +88,23 @@ network={
 
 ## Paso 3 · Encender todo y capturar
 
+> 💡 **Tip:** este bloque tiene varias líneas; podés guardarlo en un archivo (por ejemplo `encender-ap-cliente.sh`) y ejecutarlo con `bash encender-ap-cliente.sh`.
+
 ```bash
 # ↓ empieza a capturar el 'aire'
-sudo tcpdump -i hwsim0 -w tp6.pcap &
+tcpdump -i hwsim0 -w tp6.pcap &
 
 # ↓ enciende el AP (-B = en segundo plano)
-sudo hostapd -B /etc/hostapd/tp6-psk.conf
+hostapd -B /etc/hostapd/tp6-psk.conf
 
 # ↓ conecta el cliente al AP
-sudo ip netns exec cliente wpa_supplicant -B -i wlan1 -c /root/tp6-wpa.conf -f /root/wpa-tp6.log
+ip netns exec cliente wpa_supplicant -B -i wlan1 -c /root/tp6-wpa.conf -f /root/wpa-tp6.log
 
 # ↓ espera a que termine de asociarse (tarda ~10 s, por eso 20)
 sleep 20
 
 # ↓ muestra si el cliente quedó conectado
-sudo ip netns exec cliente iw dev wlan1 link
+ip netns exec cliente iw dev wlan1 link
 ```
 
 ✅ Debería mostrar `Connected to 02:00:00:00:00:00`, `SSID: WIFI-UNCUYO`, `freq: 2437`. En `/root/wpa-tp6.log` buscá `Key negotiation completed ... [PTK=CCMP GTK=CCMP]` y `CTRL-EVENT-CONNECTED`.
@@ -109,7 +113,7 @@ sudo ip netns exec cliente iw dev wlan1 link
 
 ## Paso 4 · Leer la captura
 
-Parar la captura (`sudo pkill tcpdump`) y analizar:
+Parar la captura (`pkill tcpdump`) y analizar:
 
 ```bash
 tshark -r tp6.pcap -Y "wlan.fc.type_subtype==8" | head -2
@@ -136,21 +140,23 @@ Los archivos ya vienen hechos en `lab-server`: `~/guia/configs/hostapd-tp6-sae.c
 
 Antes apagá el AP y el cliente del paso anterior y arrancá los de WPA3:
 
+> 💡 **Tip:** este bloque tiene varias líneas; podés guardarlo en un archivo (por ejemplo `wpa3-sae.sh`) y ejecutarlo con `bash wpa3-sae.sh`.
+
 ```bash
 # ↓ apaga el AP y el cliente del paso anterior
-sudo pkill hostapd; sudo ip netns exec cliente pkill wpa_supplicant
+pkill hostapd; ip netns exec cliente pkill wpa_supplicant
 
 # ↓ enciende el AP WPA3 (-B = en segundo plano)
-sudo hostapd -B ~/guia/configs/hostapd-tp6-sae.conf
+hostapd -B ~/guia/configs/hostapd-tp6-sae.conf
 
 # ↓ conecta el cliente al AP WPA3
-sudo ip netns exec cliente wpa_supplicant -B -i wlan1 -c ~/guia/configs/wpa-tp6-sae.conf -f /root/wpa-tp6-sae.log
+ip netns exec cliente wpa_supplicant -B -i wlan1 -c ~/guia/configs/wpa-tp6-sae.conf -f /root/wpa-tp6-sae.log
 
 # ↓ espera a que termine de asociarse
 sleep 20
 
 # ↓ muestra si el cliente quedó conectado
-sudo ip netns exec cliente iw dev wlan1 link
+ip netns exec cliente iw dev wlan1 link
 ```
 
 ✅ Probado: `Connected to 02:00:00:00:00:00`, `SSID: WIFI-UNCUYO-WPA3`, `freq: 2462`. En la captura (si la arrancás igual que en el paso 3), la autenticación pasa de 2 tramas "Open System" a **4 tramas Authentication** (SAE Commit y Confirm en cada sentido), y después el 4-way handshake.
@@ -174,7 +180,7 @@ sudo ip netns exec cliente iw dev wlan1 link
 Apagá el AP y el cliente (el namespace `cliente` y las radios **se quedan**):
 
 ```bash
-sudo pkill hostapd; sudo ip netns exec cliente pkill wpa_supplicant; sudo pkill tcpdump
+pkill hostapd; ip netns exec cliente pkill wpa_supplicant; pkill tcpdump
 ```
 
 ➡️ Siguiente: [`06-tp5-radius-8021x.md`](06-tp5-radius-8021x.md)

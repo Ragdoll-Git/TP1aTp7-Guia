@@ -19,7 +19,7 @@ flowchart LR
     inv["invitado (namespace)<br>eth0 · recibe IP 192.168.30.100 a .199"]
     internet(("Internet"))
 
-    subgraph ls ["🖥️ lab-server"]
+    subgraph ls ["lab-server"]
         br{{"brvlan30<br>192.168.30.1"}}
         svc["dnsmasq (DHCP + DNS)<br>nftables (set autorizados)<br>portal.py :8080"]
     end
@@ -32,32 +32,34 @@ flowchart LR
 ## Antes de empezar
 
 - TP3 hecho (y limpiado), snapshot `antes-tp4`.
-- dnsmasq del TP1 apagado: `sudo systemctl stop dnsmasq` (lo vas a reconfigurar).
-- Forwarding activo: `sudo sysctl -w net.ipv4.ip_forward=1`.
+- dnsmasq del TP1 apagado: `systemctl stop dnsmasq` (lo vas a reconfigurar).
+- Forwarding activo: `sysctl -w net.ipv4.ip_forward=1`.
 
 ## Paso 1 · El bridge y el invitado
 
-🖥️ `lab-server`:
+`lab-server`:
+
+> 💡 **Tip:** este bloque tiene varias líneas; podés guardarlo en un archivo (por ejemplo `crear-bridge-invitado.sh`) y ejecutarlo con `bash crear-bridge-invitado.sh`.
 
 ```bash
 # ↓ crea el bridge de invitados y lo enciende
-sudo ip link add brvlan30 type bridge && sudo ip link set brvlan30 up
+ip link add brvlan30 type bridge && ip link set brvlan30 up
 
 # ↓ le da la IP del gateway de invitados
-sudo ip addr add 192.168.30.1/24 dev brvlan30
+ip addr add 192.168.30.1/24 dev brvlan30
 
 # ↓ crea el 'equipo' invitado (un namespace)
-sudo ip netns add invitado && sudo ip -n invitado link set lo up
+ip netns add invitado && ip -n invitado link set lo up
 
 # ↓ cable virtual entre el invitado y el bridge
-sudo ip link add pinv type veth peer name eth0 netns invitado
+ip link add pinv type veth peer name eth0 netns invitado
 
-sudo ip link set pinv master brvlan30 up
+ip link set pinv master brvlan30 up
 
-sudo ip -n invitado link set eth0 up
+ip -n invitado link set eth0 up
 
 # ↓ le da al invitado su propio resolv.conf (así no pisa el del sistema)
-sudo mkdir -p /etc/netns/invitado && sudo touch /etc/netns/invitado/resolv.conf
+mkdir -p /etc/netns/invitado && touch /etc/netns/invitado/resolv.conf
 ```
 
 ## Paso 2 · DHCP y DNS para invitados
@@ -75,9 +77,9 @@ server=1.1.1.1
 
 ```bash
 # ↓ guarda la configuración del TP1 fuera de dnsmasq
-sudo mv /etc/dnsmasq.d/tp1.conf /root/tp1.conf.bak
+mv /etc/dnsmasq.d/tp1.conf /root/tp1.conf.bak
 
-sudo dnsmasq --test && sudo systemctl restart dnsmasq
+dnsmasq --test && systemctl restart dnsmasq
 ```
 
 ## Paso 3 · Firewall con lista de autorizados
@@ -110,7 +112,7 @@ table inet tp7 {
 
 ```bash
 # ↓ carga el firewall con la lista de autorizados
-sudo nft -f /root/tp4.nft
+nft -f /root/tp4.nft
 ```
 
 (La tabla se llama `tp7` porque es la misma que usa el TP7; así el portal sirve para los dos.)
@@ -123,19 +125,19 @@ El portal es un script de 25 líneas (`~/guia/configs/portal.py` en `lab-server`
 
 ```bash
 # ↓ copia el portal a /opt/portal
-sudo install -D ~/guia/configs/portal.py /opt/portal/portal.py
+install -D ~/guia/configs/portal.py /opt/portal/portal.py
 
 # ↓ lo ejecuta en segundo plano (tiene que ser como root)
-sudo python3 /opt/portal/portal.py &
+python3 /opt/portal/portal.py &
 ```
 
 Tiene que correr como **root** (porque ejecuta `nft`).
 
 ## Paso 5 · Experimento completo
 
-Desde 🖥️ `lab-server`, el invitado pide IP: `sudo ip netns exec invitado dhclient -v eth0`. Después, en este orden:
+Desde `lab-server`, el invitado pide IP: `ip netns exec invitado dhclient -v eth0`. Después, en este orden:
 
-| # | Comando (con `sudo ip netns exec invitado` adelante) | Qué debería pasar |
+| # | Comando (con `ip netns exec invitado` adelante) | Qué debería pasar |
 |---|---|---|
 | 1 | `curl http://example.com` | Ves `<h1>Wi-Fi Invitados UNCuyo</h1>` → **es el portal**, no example.com |
 | 2 | `curl https://example.com` | `Connection timed out` → HTTPS no se redirige, se descarta |
@@ -148,7 +150,7 @@ Desde 🖥️ `lab-server`, el invitado pide IP: `sudo ip netns exec invitado dh
 
 `dhclient` le entrega al invitado una IP entre `192.168.30.100` y `.199` (en las pruebas fue `192.168.30.150`; la tuya puede ser otra).
 
-Para ver quién está autorizado y cuánto le queda: `sudo nft list set inet tp7 autorizados`. Después del experimento 4 verás algo como:
+Para ver quién está autorizado y cuánto le queda: `nft list set inet tp7 autorizados`. Después del experimento 4 verás algo como:
 
 ```text
 elements = { 192.168.30.150 expires 59m59s656ms }
@@ -180,15 +182,17 @@ elements = { 192.168.30.150 expires 59m59s656ms }
 
 ## Limpiar antes de seguir
 
+> 💡 **Tip:** este bloque tiene varias líneas; podés guardarlo en un archivo (por ejemplo `limpiar-tp4.sh`) y ejecutarlo con `bash limpiar-tp4.sh`.
+
 ```bash
-sudo pkill -f portal.py; sudo nft delete table inet tp7
+pkill -f portal.py; nft delete table inet tp7
 
 # ↓ primero apagá el dhclient del Paso 5 (si no, sigue vivo dentro del namespace)
-sudo pkill dhclient
+pkill dhclient
 
-sudo ip netns del invitado; sudo ip link del brvlan30
+ip netns del invitado; ip link del brvlan30
 
-sudo rm /etc/dnsmasq.d/tp4.conf; sudo systemctl stop dnsmasq
+rm /etc/dnsmasq.d/tp4.conf; systemctl stop dnsmasq
 ```
 
 ⚠️ El `dhclient` del Paso 5 mantiene vivo el namespace y deja el veth `pinv` huérfano; si no lo matás, al repetir el TP4 el `ip link add pinv ...` falla con `File exists`.

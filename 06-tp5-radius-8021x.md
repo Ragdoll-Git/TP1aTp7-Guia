@@ -31,10 +31,10 @@ docente1  Cleartext-Password := "docente123"
 
 ```bash
 # ↓ valida la configuración; debe terminar en 'Configuration appears to be OK'
-sudo freeradius -XC | tail -1          # debe decir: Configuration appears to be OK
+freeradius -XC | tail -1          # debe decir: Configuration appears to be OK
 
 # ↓ reinicia el servicio para que lea los usuarios nuevos
-sudo systemctl restart freeradius
+systemctl restart freeradius
 ```
 
 **Paso 3.** Probar con `radtest` (simula a un AP, sin EAP):
@@ -92,14 +92,16 @@ network={
 
 **Paso 6.** Capturar los dos tramos y encender:
 
+> 💡 **Tip:** este bloque tiene varias líneas; podés guardarlo en un archivo (por ejemplo `capturar-y-conectar-8021x.sh`) y ejecutarlo con `bash capturar-y-conectar-8021x.sh`.
+
 ```bash
-sudo tcpdump -i lo -w tp5-radius.pcap udp port 1812 &      # AP <-> RADIUS
+tcpdump -i lo -w tp5-radius.pcap udp port 1812 &      # AP <-> RADIUS
 
-sudo tcpdump -i hwsim0 -w tp5-aire.pcap &                  # cliente <-> AP
+tcpdump -i hwsim0 -w tp5-aire.pcap &                  # cliente <-> AP
 
-sudo hostapd -B -f /root/hostapd-tp5.log /etc/hostapd/tp5-eap.conf
+hostapd -B -f /root/hostapd-tp5.log /etc/hostapd/tp5-eap.conf
 
-sudo ip netns exec cliente wpa_supplicant -B -i wlan1 -c /root/tp5-wpa.conf -f /root/wpa-tp5.log
+ip netns exec cliente wpa_supplicant -B -i wlan1 -c /root/tp5-wpa.conf -f /root/wpa-tp5.log
 
 sleep 10
 ```
@@ -122,7 +124,7 @@ wlan0: EAPOL-4WAY-HS-COMPLETED 02:00:00:00:01:00
 wlan0: STA 02:00:00:00:01:00 IEEE 802.1X: authenticated - EAP type: 25 (PEAP)
 ```
 
-**Paso 8.** Analizar la captura RADIUS: `sudo pkill tcpdump; tshark -r tp5-radius.pcap`. Esperá unos 20 paquetes: ~10 rondas `Access-Request` / `Access-Challenge` y un `Access-Accept` final con `MS-MPPE-Recv-Key` y `MS-MPPE-Send-Key`.
+**Paso 8.** Analizar la captura RADIUS: `pkill tcpdump; tshark -r tp5-radius.pcap`. Esperá unos 20 paquetes: ~10 rondas `Access-Request` / `Access-Challenge` y un `Access-Accept` final con `MS-MPPE-Recv-Key` y `MS-MPPE-Send-Key`.
 
 ## Evidencia a guardar
 
@@ -147,12 +149,12 @@ wlan0: STA 02:00:00:00:01:00 IEEE 802.1X: authenticated - EAP type: 25 (PEAP)
 | `radtest` → Reject con clave correcta | El usuario quedó **después** de una línea `DEFAULT`, o no reiniciaste FreeRADIUS |
 | `radtest` sin respuesta | Secreto incorrecto o servicio caído |
 | Cliente en bucle `EAP-STARTED` | Certificado rechazado (`ca_cert` mal) o fase 2 distinta |
-| Quiero ver qué pasa adentro | `sudo systemctl stop freeradius && sudo freeradius -X` (modo debug) |
+| Quiero ver qué pasa adentro | `systemctl stop freeradius && freeradius -X` (modo debug) |
 
 ## Dejar listo para el TP7
 
 ```bash
-sudo pkill hostapd; sudo ip netns exec cliente pkill wpa_supplicant; sudo pkill tcpdump
+pkill hostapd; ip netns exec cliente pkill wpa_supplicant; pkill tcpdump
 ```
 
 ➡️ Siguiente: [`07-tp7-integrador.md`](07-tp7-integrador.md)

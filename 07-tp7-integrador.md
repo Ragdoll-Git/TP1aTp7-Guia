@@ -10,7 +10,7 @@ flowchart TB
         g["invitado<br>cliente3 · wlan3"]
     end
 
-    subgraph srv ["🖥️ lab-server"]
+    subgraph srv ["lab-server"]
         edu["SSID UNCUYO-EDU<br>WPA2-Enterprise · wlan0"]
         inv["SSID UNCUYO-INVITADOS<br>abierto · wlan0_1"]
         rad["FreeRADIUS<br>decide la VLAN"]
@@ -44,7 +44,7 @@ flowchart TB
 ## Antes de empezar
 
 - TP4, TP6 y TP5 hechos y limpiados (sin hostapd, wpa_supplicant, portal ni dnsmasq corriendo). Snapshot `antes-tp7`.
-- Las 4 radios `hwsim` (`wlan0` a `wlan3`) y el namespace `cliente` del TP6 existen (`iw dev`). Si en el TP6 cargaste solo 3, volvé a empezar con `sudo rmmod mac80211_hwsim` y `radios=4`.
+- Las 4 radios `hwsim` (`wlan0` a `wlan3`) y el namespace `cliente` del TP6 existen (`iw dev`). Si en el TP6 cargaste solo 3, volvé a empezar con `rmmod mac80211_hwsim` y `radios=4`.
 - Archivos de apoyo en `lab-server`, en `~/guia/configs/`: `hostapd-tp7-multi.conf`, `hostapd-tp7.vlan`, `freeradius-fragmentos.txt`, `dnsmasq-tp7.conf`, `nftables-tp7.conf`, `portal.py`, `wpa-invitado.conf`.
 
 ## Paso 1 · RADIUS asigna la VLAN
@@ -100,9 +100,9 @@ post-auth {
 
 ```bash
 # ↓ valida la configuración de FreeRADIUS
-sudo freeradius -XC | tail -1       # Configuration appears to be OK
+freeradius -XC | tail -1       # Configuration appears to be OK
 
-sudo systemctl restart freeradius
+systemctl restart freeradius
 ```
 
 ## Paso 3 · hostapd con VLAN dinámica y dos SSID
@@ -128,28 +128,28 @@ ctrl_interface=/run/hostapd
 
 ```bash
 # ↓ copia el archivo de VLAN y la configuración completa del AP a /etc/hostapd
-sudo cp ~/guia/configs/hostapd-tp7.vlan /etc/hostapd/tp7.vlan
+cp ~/guia/configs/hostapd-tp7.vlan /etc/hostapd/tp7.vlan
 
-sudo cp ~/guia/configs/hostapd-tp7-multi.conf /etc/hostapd/tp7-multi.conf
+cp ~/guia/configs/hostapd-tp7-multi.conf /etc/hostapd/tp7-multi.conf
 
 # ↓ crea el bridge de invitados (tiene que existir antes que hostapd)
-sudo ip link add brvlan30 type bridge && sudo ip link set brvlan30 up
+ip link add brvlan30 type bridge && ip link set brvlan30 up
 
 # ↓ enciende el AP con los dos SSID
-sudo hostapd -B -f /root/hostapd-tp7.log /etc/hostapd/tp7-multi.conf
+hostapd -B -f /root/hostapd-tp7.log /etc/hostapd/tp7-multi.conf
 
-# ↓ muestra las interfaces Wi-Fi y sus SSID (con sudo: sin él, `iw` no se encuentra)
-sudo iw dev | grep -E "Interface|ssid"
+# ↓ muestra las interfaces Wi-Fi y sus SSID
+iw dev | grep -E "Interface|ssid"
 ```
 
 ✅ Deberías ver `wlan0` (UNCUYO-EDU), `wlan0_1` (UNCUYO-INVITADOS), `wlan0.10` y `wlan0.20`. Estas dos últimas (y los bridges `brvlan10` y `brvlan20`) las crea hostapd apenas arranca; no hace falta que se conecte nadie. Ahora ponele IP a los bridges:
 
 ```bash
-sudo ip addr add 192.168.10.1/24 dev brvlan10
+ip addr add 192.168.10.1/24 dev brvlan10
 
-sudo ip addr add 192.168.20.1/24 dev brvlan20
+ip addr add 192.168.20.1/24 dev brvlan20
 
-sudo ip addr add 192.168.30.1/24 dev brvlan30
+ip addr add 192.168.30.1/24 dev brvlan30
 ```
 
 > `dynamic_vlan=1` aceptaría clientes sin VLAN; con `2` quien no tenga VLAN **no entra** (más seguro).
@@ -181,60 +181,62 @@ server=1.1.1.1
 
 ```bash
 # ↓ copia la configuración de dnsmasq de este TP (no se reinicia todavía: primero hay que asignar las IPs a los bridges)
-sudo cp ~/guia/configs/dnsmasq-tp7.conf /etc/dnsmasq.d/tp7.conf
+cp ~/guia/configs/dnsmasq-tp7.conf /etc/dnsmasq.d/tp7.conf
 ```
 
 dnsmasq con `bind-interfaces` **necesita que los bridges existan al arrancar**. Reiniciálo cuando estén (con las IPs ya asignadas del Paso 3):
 
 ```bash
 # ↓ verifica la configuración y reinicia dnsmasq
-sudo dnsmasq --test && sudo systemctl restart dnsmasq
+dnsmasq --test && systemctl restart dnsmasq
 ```
 
 ## Paso 5 · Firewall y portal
 
 Conviene hacerlo **antes** de conectar a los invitados.
 
+> 💡 **Tip:** este bloque tiene varias líneas; podés guardarlo en un archivo (por ejemplo `firewall-y-portal.sh`) y ejecutarlo con `bash firewall-y-portal.sh`.
+
 ```bash
 # ↓ cambia el nombre de la interfaz de salida y carga el firewall
-sudo sed 's/enp1s0/enp0s3/g' ~/guia/configs/nftables-tp7.conf | sudo nft -f -
+sed 's/enp1s0/enp0s3/g' ~/guia/configs/nftables-tp7.conf | nft -f -
 
-sudo sysctl -w net.ipv4.ip_forward=1
+sysctl -w net.ipv4.ip_forward=1
 
-sudo install -D ~/guia/configs/portal.py /opt/portal/portal.py
+install -D ~/guia/configs/portal.py /opt/portal/portal.py
 
-sudo python3 /opt/portal/portal.py &
+python3 /opt/portal/portal.py &
 ```
 
 (El `sed` cambia el nombre de la interfaz de salida a la de VirtualBox.)
 
 ## Paso 6 · Conectar los clientes
 
+> 💡 **Tip:** este bloque tiene varias líneas; podés guardarlo en un archivo (por ejemplo `conectar-alumno-docente.sh`) y ejecutarlo con `bash conectar-alumno-docente.sh`.
+
 ```bash
 # segundo cliente inalámbrico (docente) en su propio namespace
-sudo ip netns add cliente2
+ip netns add cliente2
 
-sudo iw phy phy2 set netns name cliente2        # verificá el número con iw dev
+iw phy phy2 set netns name cliente2        # verificá el número con iw dev
 
-sudo ip -n cliente2 link set lo up
+ip -n cliente2 link set lo up
 
-# ↓ con sudo en las dos puntas: /root/tp5-wpa.conf solo lo lee root y la redirección `>` no usa sudo (daría "Permission denied")
-sudo sed -e 's/identity="alumno1"/identity="docente1"/; s/password="alumno123"/password="docente123"/' /root/tp5-wpa.conf | sudo tee /root/tp7-docente.conf >/dev/null
+sed -e 's/identity="alumno1"/identity="docente1"/; s/password="alumno123"/password="docente123"/' /root/tp5-wpa.conf | tee /root/tp7-docente.conf >/dev/null
 
-for ns in cliente cliente2; do sudo mkdir -p /etc/netns/$ns; sudo touch /etc/netns/$ns/resolv.conf; done
+for ns in cliente cliente2; do mkdir -p /etc/netns/$ns; touch /etc/netns/$ns/resolv.conf; done
 
-sudo ip netns exec cliente  wpa_supplicant -B -i wlan1 -c /root/tp5-wpa.conf     -f /root/wpa-alumno.log
+ip netns exec cliente  wpa_supplicant -B -i wlan1 -c /root/tp5-wpa.conf     -f /root/wpa-alumno.log
 
-sudo ip netns exec cliente2 wpa_supplicant -B -i wlan2 -c /root/tp7-docente.conf -f /root/wpa-docente.log
+ip netns exec cliente2 wpa_supplicant -B -i wlan2 -c /root/tp7-docente.conf -f /root/wpa-docente.log
 
 sleep 10
 
-sudo ip netns exec cliente  dhclient -v wlan1
+ip netns exec cliente  dhclient -v wlan1
 
-sudo ip netns exec cliente2 dhclient -v wlan2
+ip netns exec cliente2 dhclient -v wlan2
 
-# ↓ el log es de root: hace falta sudo
-sudo grep "VLAN ID" /root/hostapd-tp7.log
+grep "VLAN ID" /root/hostapd-tp7.log
 ```
 
 ✅ `grep` debe mostrar `VLAN ID 10` (alumno) y `VLAN ID 20` (docente).
@@ -243,25 +245,27 @@ El `/etc/netns/<ns>/resolv.conf` vacío hace que el DNS que recibe cada cliente 
 
 **Invitado:** tercer cliente inalámbrico, en su propio namespace, con `wpa-invitado.conf` (SSID abierto, `key_mgmt=NONE`):
 
+> 💡 **Tip:** este bloque tiene varias líneas; podés guardarlo en un archivo (por ejemplo `conectar-invitado.sh`) y ejecutarlo con `bash conectar-invitado.sh`.
+
 ```bash
 # ↓ tercer cliente inalámbrico (invitado) en su propio namespace
 
-sudo ip netns add cliente3
+ip netns add cliente3
 
-sudo iw phy phy3 set netns name cliente3        # verificá el número con iw dev
+iw phy phy3 set netns name cliente3        # verificá el número con iw dev
 
-sudo ip -n cliente3 link set lo up
+ip -n cliente3 link set lo up
 
-sudo mkdir -p /etc/netns/cliente3 && sudo touch /etc/netns/cliente3/resolv.conf
+mkdir -p /etc/netns/cliente3 && touch /etc/netns/cliente3/resolv.conf
 
-sudo ip netns exec cliente3 wpa_supplicant -B -i wlan3 -c ~/guia/configs/wpa-invitado.conf -f /root/wpa-invitado.log
+ip netns exec cliente3 wpa_supplicant -B -i wlan3 -c ~/guia/configs/wpa-invitado.conf -f /root/wpa-invitado.log
 
 sleep 10
 
-sudo ip netns exec cliente3 dhclient -v wlan3
+ip netns exec cliente3 dhclient -v wlan3
 ```
 
-Para las pruebas del Paso 7, cada usuario se prueba desde su namespace: `sudo ip netns exec cliente ...` (alumno), `cliente2` (docente) y `cliente3` (invitado).
+Para las pruebas del Paso 7, cada usuario se prueba desde su namespace: `ip netns exec cliente ...` (alumno), `cliente2` (docente) y `cliente3` (invitado).
 
 ## Paso 7 · Matriz de pruebas
 
@@ -280,7 +284,7 @@ Completá esta tabla **con lo que ves vos**. Lo de la columna derecha es lo espe
 | Invitado antes de aceptar | HTTP → portal · HTTPS → timeout · ping → bloqueado |
 | Invitado después de aceptar | HTTP → Example Domain · HTTPS → `200` |
 
-Para ver los descartes: `sudo journalctl -k | grep TP7-DROP` (sin `sudo`, el usuario `lab` no ve los mensajes del kernel y no imprime nada).
+Para ver los descartes: `journalctl -k | grep TP7-DROP`.
 
 > En la prueba real con VMs: alumno `192.168.10.161`, docente `192.168.20.160`, invitado `192.168.30.159`. Tus IPs exactas van a variar (están en el rango `.100`-`.199`). El primer `TP7-DROP` del log puede venir de un TP anterior (por ejemplo el TP4) si no reiniciaste la VM.
 
@@ -288,24 +292,26 @@ Para ver los descartes: `sudo journalctl -k | grep TP7-DROP` (sin `sudo`, el usu
 
 El TP7 deja corriendo el AP, tres clientes Wi-Fi, el portal y dnsmasq. Cuando termines de tomar las evidencias, dejá la VM limpia:
 
+> 💡 **Tip:** este bloque tiene varias líneas; podés guardarlo en un archivo (por ejemplo `limpiar-tp7.sh`) y ejecutarlo con `bash limpiar-tp7.sh`.
+
 ```bash
 # ↓ apaga el AP, los clientes Wi-Fi, los dhclient y el portal
-sudo pkill hostapd; sudo pkill wpa_supplicant; sudo pkill dhclient; sudo pkill -f portal.py
+pkill hostapd; pkill wpa_supplicant; pkill dhclient; pkill -f portal.py
 
 # ↓ borra el firewall del TP7
-sudo nft delete table inet tp7
+nft delete table inet tp7
 
 # ↓ apaga dnsmasq y borra su configuración del TP7
-sudo systemctl stop dnsmasq; sudo rm /etc/dnsmasq.d/tp7.conf
+systemctl stop dnsmasq; rm /etc/dnsmasq.d/tp7.conf
 
 # ↓ borra los tres namespaces de clientes (las radios vuelven al sistema)
-for ns in cliente cliente2 cliente3; do sudo ip netns del $ns; done
+for ns in cliente cliente2 cliente3; do ip netns del $ns; done
 
 # ↓ borra el bridge de invitados (los de VLAN 10 y 20 los borra hostapd al apagarse)
-sudo ip link del brvlan30
+ip link del brvlan30
 
 # ↓ descarga las radios virtuales (opcional: para empezar de cero)
-sudo rmmod mac80211_hwsim
+rmmod mac80211_hwsim
 ```
 
 Apagá primero los procesos (`pkill`) y recién después borrá los namespaces: un `dhclient` vivo mantiene vivo su namespace.

@@ -4,9 +4,9 @@
 
 ```mermaid
 flowchart LR
-    c["💻 lab-client<br>enp0s8 · pide IP por DHCP<br>(le toca 10.10.10.100 a .200)"]
+    c["lab-client<br>enp0s8 · pide IP por DHCP<br>(le toca 10.10.10.100 a .200)"]
     lab{{"Red interna lab1<br>10.10.10.0/24"}}
-    s["🖥️ lab-server<br>enp0s8 = 10.10.10.10<br>dnsmasq (DHCP + DNS)"]
+    s["lab-server<br>enp0s8 = 10.10.10.10<br>dnsmasq (DHCP + DNS)"]
     internet(("Internet"))
 
     c --- lab --- s
@@ -22,7 +22,7 @@ flowchart LR
 
 ## Paso 1 · Darle IP fija al servidor
 
-🖥️ `lab-server`, **desde la consola de la VM**. Editá `/etc/netplan/90-default.yaml` (reemplazá todo):
+`lab-server`, **desde la consola de la VM**. Editá `/etc/netplan/90-default.yaml` (reemplazá todo):
 
 ```yaml
 network:
@@ -37,10 +37,10 @@ network:
 
 ```bash
 # ↓ netplan exige que solo el dueño pueda leer el archivo
-sudo chmod 600 /etc/netplan/90-default.yaml
+chmod 600 /etc/netplan/90-default.yaml
 
 # ↓ aplica la configuración de red (hacelo desde la consola de la VM)
-sudo netplan apply
+netplan apply
 
 # ↓ muestra la IP de la interfaz; debe decir 10.10.10.10/24
 ip -br addr show enp0s8
@@ -52,7 +52,7 @@ ip -br addr show enp0s8
 
 ## Paso 2 · Configurar dnsmasq
 
-🖥️ `lab-server`. Creá `/etc/dnsmasq.d/tp1.conf`:
+`lab-server`. Creá `/etc/dnsmasq.d/tp1.conf`:
 
 ```ini
 bind-interfaces
@@ -77,17 +77,17 @@ Qué hace cada línea:
 
 ```bash
 # ↓ verifica la sintaxis, reinicia dnsmasq y confirma que quedó activo
-sudo dnsmasq --test && sudo systemctl restart dnsmasq && systemctl is-active dnsmasq
+dnsmasq --test && systemctl restart dnsmasq && systemctl is-active dnsmasq
 
-# ↓ muestra en qué puertos UDP escucha dnsmasq (con sudo: sin él no se ve el nombre del programa)
-sudo ss -lunp | grep dnsmasq
+# ↓ muestra en qué puertos UDP escucha dnsmasq
+ss -lunp | grep dnsmasq
 ```
 
 ✅ Debe decir `active` y verse dnsmasq escuchando en `10.10.10.10:53` (DNS) y `0.0.0.0%enp0s8:67` (DHCP). Que aparezcan también `127.0.0.1:53` o `[::1]:53` es normal.
 
 ## Paso 3 · Probar desde el cliente
 
-💻 `lab-client`. Primero reiniciá la red para que pida IP: `sudo networkctl reconfigure enp0s8`.
+`lab-client`. Primero reiniciá la red para que pida IP: `networkctl reconfigure enp0s8`.
 
 | Prueba | Comando | Qué debería ver |
 |---|---|---|
@@ -102,30 +102,30 @@ sudo ss -lunp | grep dnsmasq
 
 ## Paso 4 · Ver el DHCP "por dentro" (la parte que se evalúa)
 
-En 🖥️ `lab-server` empezá a capturar:
+En `lab-server` empezá a capturar:
 
 ```bash
 # ↓ captura solo el tráfico DHCP y lo guarda en un archivo
-sudo tcpdump -i enp0s8 -n -v -w tp1-dhcp.pcap udp port 67 or udp port 68
+tcpdump -i enp0s8 -n -v -w tp1-dhcp.pcap udp port 67 or udp port 68
 ```
 
-En 💻 `lab-client`, **una prueba a la vez**:
+En `lab-client`, **una prueba a la vez**:
 
 | Comando en el cliente | Qué se ve en la captura |
 |---|---|
-| `sudo networkctl renew enp0s8` | Solo **Request + ACK** (renovación: ya tenía IP) |
-| `sudo networkctl reconfigure enp0s8` | **Release, Discover, Offer, Request, ACK** (el famoso DORA, completo) |
+| `networkctl renew enp0s8` | Solo **Request + ACK** (renovación: ya tenía IP) |
+| `networkctl reconfigure enp0s8` | **Release, Discover, Offer, Request, ACK** (el famoso DORA, completo) |
 
 Cortá la captura con Ctrl+C y abrí `tp1-dhcp.pcap` con `tshark -r tp1-dhcp.pcap` o Wireshark (filtro `dhcp`). Buscá: Transaction ID, MAC del cliente, opción 53 (tipo de mensaje), *Your IP* y las opciones 3 (router), 6 (DNS), 51 (tiempo de concesión) y 54 (servidor).
 
 ## Paso 5 · Provocar una falla a propósito
 
-🖥️ `lab-server`: `sudo systemctl stop dnsmasq`. Después en 💻 `lab-client`:
+`lab-server`: `systemctl stop dnsmasq`. Después en `lab-client`:
 
 - `ping -c2 10.10.10.10` → **funciona** (la IP seguía asignada).
 - `ping -c2 server.lab.local` → **falla** con `Temporary failure in name resolution` (ya no hay quien traduzca nombres).
 
-Volvé a encender: `sudo systemctl start dnsmasq`.
+Volvé a encender: `systemctl start dnsmasq`.
 
 ## Evidencia a guardar
 

@@ -25,7 +25,7 @@
 
 | Sistema | Cómo instalarlo |
 |---|---|
-| **Linux** (Debian/Ubuntu) | `sudo apt install qemu-utils wget`. `VBoxManage` viene con VirtualBox; verificalo con `VBoxManage --version` |
+| **Linux** (Debian/Ubuntu) | `apt install qemu-utils wget`. `VBoxManage` viene con VirtualBox; verificalo con `VBoxManage --version` |
 | **Windows 10/11** | `winget install SoftwareFreedomConservancy.QEMU` (o instalar desde <https://qemu.weilnetz.de/w64/>) y `curl.exe`, que ya viene en Windows normalmente. `VBoxManage` viene con VirtualBox, pero a veces no está en el PATH (arreglo abajo ↓) |
 
 **Solo en Windows:** copiá y pegá los comandos de abajo para agregar qemu y VBoxManage al PATH de Windows (vale solo para esa ventana de PowerShell: hay que repetirlo si la cerrás):
@@ -171,10 +171,10 @@ Con `ip -br addr`, verificá que `enp0s3` recibió una IP (por ejemplo _10.0.2.1
 
 ```bash
 # ↓ actualiza la lista de paquetes disponibles
-sudo apt-get update
+apt-get update
 
 # ↓ instala todo lo que se usa en los TPs (DHCP/DNS, capturas, firewall, Wi-Fi, RADIUS)
-sudo apt-get install -y dnsmasq tcpdump tshark bind9-dnsutils curl nftables conntrack hostapd wpasupplicant iw freeradius freeradius-utils isc-dhcp-client
+apt-get install -y dnsmasq tcpdump tshark bind9-dnsutils curl nftables conntrack hostapd wpasupplicant iw freeradius freeradius-utils isc-dhcp-client
 ```
 _Si te pregunta por Wireshark/non-root: respondé que no._
 
@@ -182,7 +182,7 @@ Ahora hay que clonar **esta guía** en la VM _lab-server_ para tener los archivo
 
 ```bash
 # ↓ instala git y baja esta guía (con sus configs/ y scripts/) a ~/guia
-sudo apt-get install -y git && git clone https://github.com/Ragdoll-Git/TP1aTP7-Guia.git ~/guia
+apt-get install -y git && git clone https://github.com/Ragdoll-Git/TP1aTP7-Guia.git ~/guia
 ```
 
 ### 4.2 · En `lab-client`
@@ -285,7 +285,7 @@ Con las VMs apagadas, en VirtualBox: **Máquina → Tomar instantánea** en las 
 
 - [ ] `lab-server` tiene `enp0s3` con IP (NAT) y `enp0s8` sin IP todavía.
 - [ ] `lab-server` hace `ping -c2 1.1.1.1` bien.
-- [ ] `lab-server` tiene los paquetes instalados (`tshark --version`, `sudo hostapd -v`, `sudo freeradius -v`; con `sudo` porque, entrando por SSH, esos programas no están en el PATH del usuario `lab`) y la carpeta `~/guia/configs/` existe.
+- [ ] `lab-server` tiene los paquetes instalados (`tshark --version`, `hostapd -v`, `freeradius -v`) y la carpeta `~/guia/configs/` existe.
 - [ ] `lab-client` tiene `dig`, `tcpdump` y `traceroute`, y el cable de su adaptador NAT quedó desconectado (`cableconnected1="off"`).
 - [ ] Hay snapshot `base-limpia` en las dos VMs.
 

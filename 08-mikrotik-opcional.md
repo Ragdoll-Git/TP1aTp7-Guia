@@ -19,8 +19,8 @@ flowchart LR
     internet(("Internet"))
     mk["lab-mikrotik<br>ether1 = WAN (DHCP)<br>ether2 = 10.10.10.1<br>vlan10 / vlan20 / vlan30 sobre ether2"]
     lab{{"Red interna lab1<br>10.10.10.0/24 + VLAN 10, 20 y 30 etiquetadas"}}
-    c["💻 lab-client<br>enp0s8 · DHCP del MikroTik"]
-    s["🖥️ lab-server<br>enp0s8 = 10.10.10.10<br>namespaces pc10, pc20 e invitado<br>(sobre enp0s8.10 / .20 / .30)"]
+    c["lab-client<br>enp0s8 · DHCP del MikroTik"]
+    s["lab-server<br>enp0s8 = 10.10.10.10<br>namespaces pc10, pc20 e invitado<br>(sobre enp0s8.10 / .20 / .30)"]
 
     internet ---|"ether1 · NAT"| mk
     mk ---|"ether2 · trunk"| lab
@@ -31,7 +31,7 @@ flowchart LR
 ## Antes de empezar
 
 - TP1 a TP4 hechos (y TP7 si podés).
-- Las VMs `lab-server` y `lab-client` deben estar en la red interna **`lab1`**, y el **dnsmasq de `lab-server` apagado**: `sudo systemctl disable --now dnsmasq`.
+- Las VMs `lab-server` y `lab-client` deben estar en la red interna **`lab1`**, y el **dnsmasq de `lab-server` apagado**: `systemctl disable --now dnsmasq`.
 - ⚠️ Esta parte **no se probó en VirtualBox** en la guía original (solo en KVM/libvirt con RouterOS 7.24.5).
 
 **Si venís del TP2**, devolvé todo a como estaba en el TP1:
@@ -55,7 +55,7 @@ network:
     enp0s8: {dhcp4: true}      # red del laboratorio (el NAT puede seguir desconectado: en este capítulo el cliente solo usa lab1)
 ```
 
-Y aplicalo desde la consola: `sudo netplan apply`.
+Y aplicalo desde la consola: `netplan apply`.
 
 ## Paso 1 · Crear la VM del MikroTik (CHR)
 
@@ -73,7 +73,7 @@ wget https://download.mikrotik.com/routeros/7.24.5/chr-7.24.5.vdi.zip
 unzip chr-7.24.5.vdi.zip
 ```
 
-(Si falta `unzip`: `sudo apt install unzip`.)
+(Si falta `unzip`: `apt install unzip`.)
 
 **Windows (PowerShell):** `curl.exe` en lugar de `wget` y `Expand-Archive` en lugar de `unzip` (los dos vienen con Windows):
 
@@ -128,8 +128,8 @@ El DHCP de RouterOS son **tres piezas**: *pool* (qué direcciones), *server* (en
 | Prueba | Dónde | Comando | Debería ver |
 |---|---|---|---|
 | Lease | MikroTik | `/ip dhcp-server lease print` | una línea con `D` (dinámica) y `bound` |
-| Cliente | 💻 | `ip -br addr`, `ip route`, `resolvectl status` | IP 10.10.10.x, default vía `10.10.10.1`, DNS `10.10.10.1` |
-| DNS | 💻 | `dig +short server.lab.local @10.10.10.1` | `10.10.10.10` |
+| Cliente | lab-client | `ip -br addr`, `ip route`, `resolvectl status` | IP 10.10.10.x, default vía `10.10.10.1`, DNS `10.10.10.1` |
+| DNS | lab-client | `dig +short server.lab.local @10.10.10.1` | `10.10.10.10` |
 
 ## Paso 3 · NAT y protección del router (equivale al TP2)
 
@@ -178,22 +178,24 @@ add chain=forward action=drop comment="fwd: todo lo demas"
 
 **Diferencia clave con nftables:** en RouterOS las cadenas **no tienen política**. Lo que no coincide con ninguna regla se **acepta**. El `policy drop` se reemplaza por una **última regla `drop` sin condiciones**, y las reglas se evalúan **en orden**.
 
-Los equipos, en 🖥️ `lab-server`:
+Los equipos, en `lab-server`:
+
+> 💡 **Tip:** este bloque tiene varias líneas; podés guardarlo en un archivo (por ejemplo `crear-equipos-vlan.sh`) y ejecutarlo con `bash crear-equipos-vlan.sh`.
 
 ```bash
 # ↓ por cada VLAN (10 y 20): crea la subinterfaz y un 'equipo' que vive en ella
 for v in 10 20; do
-  sudo ip link add link enp0s8 name enp0s8.$v type vlan id $v
-  sudo ip netns add pc$v
-  sudo ip link set enp0s8.$v netns pc$v
-  sudo ip -n pc$v link set lo up
-  sudo ip -n pc$v link set enp0s8.$v up
-  sudo ip -n pc$v addr add 192.168.$v.10/24 dev enp0s8.$v
-  sudo ip -n pc$v route add default via 192.168.$v.1
+  ip link add link enp0s8 name enp0s8.$v type vlan id $v
+  ip netns add pc$v
+  ip link set enp0s8.$v netns pc$v
+  ip -n pc$v link set lo up
+  ip -n pc$v link set enp0s8.$v up
+  ip -n pc$v addr add 192.168.$v.10/24 dev enp0s8.$v
+  ip -n pc$v route add default via 192.168.$v.1
 done
 ```
 
-Pruebas (con `sudo ip netns exec pcNN ping …`):
+Pruebas (con `ip netns exec pcNN ping …`):
 
 | Prueba | Debería pasar |
 |---|---|
@@ -201,7 +203,7 @@ Pruebas (con `sudo ip netns exec pcNN ping …`):
 | pc10 → pc20 | ❌ 100 % perdido |
 | pc10 → 1.1.1.1 | ✅ |
 
-Para ver la etiqueta: `sudo tcpdump -nn -e -i enp0s8 vlan and icmp` mientras pc20 hace ping a pc10. Cada paquete pasa **dos veces** por el trunk (sube con la VLAN de origen, baja con la de destino).
+Para ver la etiqueta: `tcpdump -nn -e -i enp0s8 vlan and icmp` mientras pc20 hace ping a pc10. Cada paquete pasa **dos veces** por el trunk (sube con la VLAN de origen, baja con la de destino).
 
 ## Paso 5 · Hotspot para invitados (equivale al TP4)
 
@@ -223,22 +225,24 @@ El **Hotspot** es un portal cautivo completo: lo que armaste a mano con DNAT, el
 
 `login-by`: `http-chap` (la contraseña no viaja en claro), `http-pap` (sí viaja en claro), `trial` (sin usuario: el "Acepto" del TP4, 1 hora por día y por MAC).
 
-El invitado, en 🖥️ `lab-server`:
+El invitado, en `lab-server`:
+
+> 💡 **Tip:** este bloque tiene varias líneas; podés guardarlo en un archivo (por ejemplo `crear-invitado-vlan30.sh`) y ejecutarlo con `bash crear-invitado-vlan30.sh`.
 
 ```bash
-sudo ip link add link enp0s8 name enp0s8.30 type vlan id 30
+ip link add link enp0s8 name enp0s8.30 type vlan id 30
 
-sudo ip netns add invitado
+ip netns add invitado
 
-sudo ip link set enp0s8.30 netns invitado
+ip link set enp0s8.30 netns invitado
 
-sudo ip -n invitado link set lo up
+ip -n invitado link set lo up
 
-sudo ip -n invitado link set enp0s8.30 up
+ip -n invitado link set enp0s8.30 up
 
-sudo mkdir -p /etc/netns/invitado && sudo touch /etc/netns/invitado/resolv.conf
+mkdir -p /etc/netns/invitado && touch /etc/netns/invitado/resolv.conf
 
-sudo ip netns exec invitado dhclient -v enp0s8.30
+ip netns exec invitado dhclient -v enp0s8.30
 ```
 
 | Prueba | Comando (en el namespace `invitado`) | Debería pasar |

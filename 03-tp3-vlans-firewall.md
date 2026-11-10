@@ -17,7 +17,7 @@ Desde acá todo se hace **solo en `lab-server`**, con *namespaces* (cada uno es 
 
 ```mermaid
 flowchart TB
-    subgraph ls ["🖥️ lab-server"]
+    subgraph ls ["lab-server"]
         pc10["pc10 (namespace)<br>eth0 = 192.168.10.10<br>VLAN 10"]
         pc20["pc20 (namespace)<br>eth0 = 192.168.20.10<br>VLAN 20"]
         sw{{"sw · switch virtual<br>(bridge con vlan_filtering)"}}
@@ -36,59 +36,71 @@ flowchart TB
 
 ## Parte A · El switch y los cables
 
-🖥️ `lab-server`:
+`lab-server`:
+
+> 💡 **Tip:** para bloques de comandos de varias líneas (como los bucles `for`), podés crear un archivo de script (por ejemplo `crear-switch-vlans.sh`), pegar el bloque de comandos adentro y luego ejecutarlo con `bash crear-switch-vlans.sh`.
 
 ```bash
 # "computadoras" y router (namespaces)
-for n in pc10 pc20 router; do sudo ip netns add $n; sudo ip -n $n link set lo up; done
+for n in pc10 pc20 router; do ip netns add $n; ip -n $n link set lo up; done
 
 # switch con filtrado de VLAN
-sudo ip link add sw type bridge vlan_filtering 1
+ip link add sw type bridge vlan_filtering 1
 
-sudo ip link set sw up
+ip link set sw up
 
 # cables (veth): un extremo en el switch, el otro en cada equipo
-sudo ip link add p10    type veth peer name eth0 netns pc10
+ip link add p10    type veth peer name eth0 netns pc10
 
-sudo ip link add p20    type veth peer name eth0 netns pc20
+ip link add p20    type veth peer name eth0 netns pc20
 
-sudo ip link add ptrunk type veth peer name eth0 netns router
+ip link add ptrunk type veth peer name eth0 netns router
+```
 
+Para asociar los puertos al switch virtual y quitarles la VLAN 1 nativa por defecto, podés pegar este bloque directamente o guardarlo en un archivo `asociar-puertos.sh` y ejecutarlo con `bash asociar-puertos.sh`:
+
+```bash
 for p in p10 p20 ptrunk; do
-  sudo ip link set $p master sw up
-  sudo bridge vlan del dev $p vid 1
+  ip link set $p master sw up
+  bridge vlan del dev $p vid 1
 done
+```
 
+Ahora configurá el modo acceso y trunk:
+
+```bash
 # acceso: una VLAN, sin etiqueta hacia el equipo
-sudo bridge vlan add dev p10 vid 10 pvid untagged
+bridge vlan add dev p10 vid 10 pvid untagged
 
-sudo bridge vlan add dev p20 vid 20 pvid untagged
+bridge vlan add dev p20 vid 20 pvid untagged
 
 # trunk: varias VLANs, etiquetadas
-sudo bridge vlan add dev ptrunk vid 10
+bridge vlan add dev ptrunk vid 10
 
-sudo bridge vlan add dev ptrunk vid 20
+bridge vlan add dev ptrunk vid 20
 
-# ↓ muestra qué VLAN tiene cada puerto (con sudo: sin él, por SSH da "command not found")
-sudo bridge vlan show
+# ↓ muestra qué VLAN tiene cada puerto
+bridge vlan show
 ```
 
 ✅ Debe verse: `p10 → 10 PVID Egress Untagged` · `p20 → 20 PVID Egress Untagged` · `ptrunk → 10 y 20`. Además aparece una línea `sw 1 PVID Egress Untagged`: es el propio switch y es normal.
 
 ## Parte B · Equipos y router
 
+> 💡 **Tip:** este bloque tiene varias líneas; podés guardarlo en un archivo (por ejemplo `configurar-equipos-router.sh`) y ejecutarlo con `bash configurar-equipos-router.sh`.
+
 ```bash
 # ↓ le pone IP y gateway a pc10 (y lo mismo a pc20 en las líneas siguientes)
-sudo ip -n pc10 addr add 192.168.10.10/24 dev eth0; sudo ip -n pc10 link set eth0 up
+ip -n pc10 addr add 192.168.10.10/24 dev eth0; ip -n pc10 link set eth0 up
 
-sudo ip -n pc10 route add default via 192.168.10.1
+ip -n pc10 route add default via 192.168.10.1
 
-sudo ip -n pc20 addr add 192.168.20.10/24 dev eth0; sudo ip -n pc20 link set eth0 up
+ip -n pc20 addr add 192.168.20.10/24 dev eth0; ip -n pc20 link set eth0 up
 
-sudo ip -n pc20 route add default via 192.168.20.1
+ip -n pc20 route add default via 192.168.20.1
 
 # ↓ atajo: $R ejecuta el comando adentro del router
-R="sudo ip netns exec router"
+R="ip netns exec router"
 
 $R ip link set eth0 up
 
@@ -126,9 +138,11 @@ $R sysctl net.ipv4.ip_forward
 | 4 | + firewall | pc20 → pc10 | ✅ responde |
 | 5 | + firewall | pc10 → pc20 | ❌ sin respuesta |
 
-Cada ping se hace así: `sudo ip netns exec pc10 ping -c2 192.168.20.10`.
+Cada ping se hace así: `ip netns exec pc10 ping -c2 192.168.20.10`.
 
 Para pasar del experimento 2 al 3: `$R sysctl -w net.ipv4.ip_forward=1`. Para el 4 y el 5, cargá el firewall:
+
+> 💡 **Tip:** este bloque tiene varias líneas; podés guardarlo en un archivo (por ejemplo `firewall-tp3.sh`) y ejecutarlo con `bash firewall-tp3.sh`.
 
 ```bash
 $R nft -f - <<'EOF'
@@ -146,14 +160,17 @@ Leela en voz alta: *"Todo lo que se reenvía se descarta, salvo las respuestas a
 
 ## Parte D · Ver la etiqueta 802.1Q
 
-Con **dos terminales** en 🖥️ `lab-server`, mientras pc20 hace ping a pc10:
+Con **dos terminales** en `lab-server`, mientras pc20 hace ping a pc10:
 
 ```bash
-sudo tcpdump -i ptrunk -e -n icmp      # terminal 1
+# ↓ terminal 1
+tcpdump -i ptrunk -e -n icmp
 
-sudo tcpdump -i p10    -e -n icmp      # terminal 2
+# ↓ terminal 2
+tcpdump -i p10 -e -n icmp   
 
-sudo ip netns exec pc20 ping -c2 192.168.10.10    # terminal 3
+# ↓ terminal 3
+ip netns exec pc20 ping -c2 192.168.10.10    
 ```
 
 Debería verse (recortado):
@@ -197,7 +214,7 @@ p10:    ... IPv4 (0x0800),      length  98: 192.168.10.10 > 192.168.20.10: ICMP 
 
 ```bash
 # ↓ borra los equipos, el router y el switch para dejar todo limpio
-for n in pc10 pc20 router; do sudo ip netns del $n; done; sudo ip link del sw
+for n in pc10 pc20 router; do ip netns del $n; done; ip link del sw
 ```
 
 ➡️ Siguiente: [`04-tp4-portal-cautivo.md`](04-tp4-portal-cautivo.md)
