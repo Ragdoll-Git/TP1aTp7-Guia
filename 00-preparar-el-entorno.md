@@ -157,7 +157,7 @@ apt-get update && apt-get install -y cloud-guest-utils
 apt-get install -y keyboard-configuration console-setup
 
 # ↓ agranda la partición 1 hasta ocupar todo el disco
-growpart /dev/sda 1
+growpart /dev/sda1
 
 # ↓ agranda el sistema de archivos para usar ese espacio
 resize2fs /dev/sda1
