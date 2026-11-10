@@ -116,7 +116,7 @@ En 💻 `lab-client`, **una prueba a la vez**:
 | `sudo networkctl renew enp0s8` | Solo **Request + ACK** (renovación: ya tenía IP) |
 | `sudo networkctl reconfigure enp0s8` | **Release, Discover, Offer, Request, ACK** (el famoso DORA, completo) |
 
-Cortá la captura con Ctrl+C y abrí `tp1-dhcp.pcap` con Wireshark (filtro `dhcp`). Buscá: Transaction ID, MAC del cliente, opción 53 (tipo de mensaje), *Your IP* y las opciones 3 (router), 6 (DNS), 51 (tiempo de concesión) y 54 (servidor).
+Cortá la captura con Ctrl+C y abrí `tp1-dhcp.pcap` con `tshark -r tp1-dhcp.pcap` o Wireshark (filtro `dhcp`). Buscá: Transaction ID, MAC del cliente, opción 53 (tipo de mensaje), *Your IP* y las opciones 3 (router), 6 (DNS), 51 (tiempo de concesión) y 54 (servidor).
 
 ## Paso 5 · Provocar una falla a propósito
 
