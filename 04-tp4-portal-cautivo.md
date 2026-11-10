@@ -63,8 +63,11 @@ mkdir -p /etc/netns/invitado && touch /etc/netns/invitado/resolv.conf
 ```
 
 ## Paso 2 · DHCP y DNS para invitados
+Guarda (hacer backup) la configuracion de dnsmasq del TP1 con `mv /etc/dnsmasq.d/tp1.conf /root/tp1.conf.bak`.
 
-`/etc/dnsmasq.d/tp4.conf` (borrá o desactivá el del TP1):
+Con `touch` crea `/etc/dnsmasq.d/tp4.conf`,
+
+En `/etc/dnsmasq.d/tp4.conf` agrega:
 
 ```ini
 bind-interfaces
@@ -74,18 +77,17 @@ dhcp-option=tag:invitados,option:router,192.168.30.1
 dhcp-option=tag:invitados,option:dns-server,192.168.30.1
 server=1.1.1.1
 ```
+Verifica la configuracion si esta correcta y reinicia el servicio de dnsmasq: 
 
 ```bash
-# ↓ guarda la configuración del TP1 fuera de dnsmasq
-mv /etc/dnsmasq.d/tp1.conf /root/tp1.conf.bak
-
 dnsmasq --test && systemctl restart dnsmasq
 ```
 
 ## Paso 3 · Firewall con lista de autorizados
 
-La pieza central es un **set** de nftables con vencimiento. Guardalo en `/root/tp4.nft` (usa `enp0s3` como salida a Internet):
+La pieza central es un **set** de nftables con vencimiento. Si iniciaste sesion en root guardalo usando nano `~/tp4.nft`, sino `nano /root/tp4.nft`. Esta config usa `enp0s3` como salida a Internet:
 
+> La tabla se llama `tp7` porque usaremos la misma para el TP7; así el portal sirve para ambos.
 ```text
 table inet tp7 {
   set autorizados {
@@ -115,23 +117,33 @@ table inet tp7 {
 nft -f /root/tp4.nft
 ```
 
-(La tabla se llama `tp7` porque es la misma que usa el TP7; así el portal sirve para los dos.)
-
 Leelo en voz alta: *"Si viene de invitados, no está autorizado y va al puerto 80, cambiá el destino al portal. A Internet solo pasan los autorizados. Lo demás se descarta y se registra."*
 
 ## Paso 4 · El portal
 
-El portal es un script de 25 líneas (`~/guia/configs/portal.py` en `lab-server`): sirve una página y, en `/aceptar`, agrega la IP del cliente al set.
+El portal es un script de 25 líneas que esta en:`~/guia/configs/portal.py` en el `lab-server`, sirve una página.
+
+Arega la IP del cliente al set:
+   
+   ```bash
+   nft add element inet tp7 autorizados { <IP_DEL_CLIENTE> }
+   ```
+   
+### Ponerlo en marcha
+
 
 ```bash
 # ↓ copia el portal a /opt/portal
 install -D ~/guia/configs/portal.py /opt/portal/portal.py
 
-# ↓ lo ejecuta en segundo plano (tiene que ser como root)
+# ↓ lo ejecuta en segundo plano (tiene que correr como root)
 python3 /opt/portal/portal.py &
 ```
 
-Tiene que correr como **root** (porque ejecuta `nft`).
+**Detalles importantes de estos comandos:**
+- `install -D`: Copia el archivo y crea automáticamente la carpeta `/opt/portal` si no existía, dejándolo en una ubicación limpia del sistema.
+- El `&` al final: Ejecuta el servidor en segundo plano (*background*) para no dejar la terminal bloqueada y poder seguir usándola.
+- **Tiene que correr como root:** Como el script interactúa directamente con el firewall ejecutando comandos de `nft` mediante `subprocess`, necesita privilegios de administrador. Si se corriera como usuario común, la llamada a `nft` fallaría con error de permisos, la IP nunca entraría a la lista de autorizados y el invitado se quedaría siempre atrapado en el portal.
 
 ## Paso 5 · Experimento completo
 
