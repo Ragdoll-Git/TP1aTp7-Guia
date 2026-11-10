@@ -123,11 +123,11 @@ sudo nft -f /etc/nftables.conf && sudo systemctl enable --now nftables
 
 | Prueba | Dónde | Comando | Debería ver |
 |---|---|---|---|
-| Gateway | 💻 `lab-client` | `ping -c3 10.20.20.1` | responde |
+| Gateway | `lab-client` | `ping -c3 10.20.20.1` | responde |
 | Salida del router | 🖥️ `lab-server` | `ping -c3 8.8.8.8` | responde |
-| Internet | 💻 `lab-client`| `ping -c3 1.1.1.1` y `curl -I https://example.com` | responde / `HTTP/2 200` |
-| Primer salto | 💻 `lab-client`| `traceroute -n 1.1.1.1` | salto 1 = `10.20.20.1` (el router) · salto 2 = `10.0.2.2` (el NAT de VirtualBox, por el NAT doble) |
-| NAT visible | 🖥️ `lab-server`| `sudo tcpdump -n -i enp0s8 icmp` y, en otra terminal, `sudo tcpdump -n -i enp0s3 icmp` (mientras tanto, `ping -c3 1.1.1.1` en 💻) | LAN: origen `10.20.20.100` · WAN: origen = IP WAN del router (en VirtualBox suele ser `10.0.2.15`) |
+| Internet | `lab-client`| `ping -c3 1.1.1.1` y `curl -I https://example.com` | responde / `HTTP/2 200` |
+| Primer salto | `lab-client`| `traceroute -n 1.1.1.1` | salto 1 = `10.20.20.1` (el router) · salto 2 = `10.0.2.2` (el NAT de VirtualBox, por el NAT doble) |
+| NAT visible | `lab-server`| `sudo tcpdump -n -i enp0s8 icmp` y, en otra terminal, `sudo tcpdump -n -i enp0s3 icmp` (mientras tanto, `ping -c3 1.1.1.1` en `lab-client`) | LAN: origen `10.20.20.100` · WAN: origen = IP WAN del router (en VirtualBox suele ser `10.0.2.15`) |
 
 También, en el router:
 
